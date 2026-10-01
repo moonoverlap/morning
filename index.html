@@ -129,6 +129,15 @@ html.monitor .clock{font-size:clamp(3.6rem,8.6vw,7.6rem)}
 
 /* 보드 */
 .board{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(300px,380px);gap:18px;align-items:start}
+.side{display:grid;gap:18px;min-width:0;align-content:start}
+@media (min-width:1500px){
+  .board{grid-template-columns:repeat(3,minmax(0,1fr)) minmax(300px,360px)}
+  .side{display:contents}
+}
+.week-bar{height:6px;border-radius:999px;background:var(--tl-track);overflow:hidden}
+.week-bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:inherit;transition:width .45s ease}
+.add-row #new-week{flex:1 1 160px;min-width:0}
+.add-row #new-week-due{flex:0 0 auto;width:auto;max-width:100%}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;display:grid;gap:14px;min-width:0;box-shadow:var(--shadow)}
 .card-head{display:flex;align-items:flex-start;gap:10px}
 .card-head .ttl{flex:1;min-width:0}
@@ -284,20 +293,21 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
 
 @media (max-width:1180px){
   .board{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
-  .cal{grid-column:1/-1}
+  .side{grid-column:1/-1;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}
 }
 @media (max-width:860px){
   .hero{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:760px){
   .board{grid-template-columns:minmax(0,1fr)}
+  .side{grid-template-columns:minmax(0,1fr)}
   .card{padding:16px}
   .actions{width:100%}
   .actions .btn,.actions .pill{flex:1 1 auto}
 }
 @media (prefers-reduced-motion:reduce){
   .ring-bell::before,.ring-bell::after{animation:none;opacity:0}
-  .prog-bar i,.toast,.item,.box{transition:none}
+  .prog-bar i,.week-bar i,.toast,.item,.box{transition:none}
 }
 </style></head><body>
 
@@ -380,6 +390,23 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
       <ul class="list" id="task-list"></ul>
     </section>
 
+    <div class="side">
+    <section class="card" aria-labelledby="week-h">
+      <header class="card-head">
+        <div class="ttl">
+          <h2 id="week-h"><span id="week-title">이번 주 할일</span> <span class="count" id="w-count"></span></h2>
+          <p class="card-sub" id="week-sub">이 주 안에 끝내면 되는 일</p>
+        </div>
+      </header>
+      <div class="week-bar" role="progressbar" aria-label="이번 주 완료율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="w-barwrap"><i id="w-bar"></i></div>
+      <form class="add-row" id="add-week-form" autocomplete="off">
+        <input class="input" id="new-week" maxlength="80" placeholder="이번 주 할일 입력 후 Enter" aria-label="새 이번 주 할일">
+        <select class="input" id="new-week-due" aria-label="마감 요일 (선택)"></select>
+        <button class="btn primary" type="submit" id="add-week-btn">추가</button>
+      </form>
+      <button type="button" class="carry" id="week-carry" hidden></button>
+      <ul class="list" id="week-list"></ul>
+    </section>
     <aside class="card cal" aria-labelledby="cal-title">
       <header class="cal-head">
         <h2 id="cal-title">달력</h2>
@@ -399,6 +426,7 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
         <div class="stat"><b id="st-rec">0일</b><span>할일 있던 날</span></div>
       </div>
     </aside>
+    </div>
   </main>
 
   <footer class="foot">
@@ -413,7 +441,7 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
     <label class="field"><span>할일</span><input class="input" id="f-title" maxlength="80" required></label>
     <div class="field-row">
       <label class="field"><span>알림 시간 <em>(선택)</em></span><input class="input" type="time" id="f-time"></label>
-      <label class="field" id="f-date-wrap"><span>날짜</span><input class="input" type="date" id="f-date"></label>
+      <label class="field" id="f-date-wrap"><span id="f-date-label">날짜</span><input class="input" type="date" id="f-date"></label>
     </div>
     <fieldset class="field" id="f-days-wrap">
       <legend>반복 요일</legend>
@@ -550,16 +578,16 @@ const STARTER = [
 ];
 
 /* ---------- 저장소 (클라우드 db 우선, 없으면 이 브라우저) ---------- */
-const P = { routines: 'planner/main/routines', days: 'planner/main/days', settings: 'planner/main' };
+const P = { routines: 'planner/main/routines', days: 'planner/main/days', weeks: 'planner/main/weeks', settings: 'planner/main' };
 const LS_KEY = 'morning-checkboard:v1';
 const Store = {
   mode: 'loading', db: null,
-  routines: {}, days: {}, settings: clone(DEFAULT_SETTINGS),
-  loaded: { r: false, d: false, s: false },
+  routines: {}, days: {}, weeks: {}, settings: clone(DEFAULT_SETTINGS),
+  loaded: { r: false, d: false, w: false, s: false },
   dirty: new Map(), queues: new Map(), unsubs: {}
 };
 const S = () => Store.settings;
-const isLoaded = () => Store.mode === 'local' || (Store.mode === 'db' && Store.loaded.r && Store.loaded.d);
+const isLoaded = () => Store.mode === 'local' || (Store.mode === 'db' && Store.loaded.r && Store.loaded.d && Store.loaded.w);
 
 function loadLocal() {
   try {
@@ -568,12 +596,13 @@ function loadLocal() {
       const d = JSON.parse(raw);
       Store.routines = d.routines || {};
       Store.days = d.days || {};
+      Store.weeks = d.weeks || {};
       Store.settings = Object.assign(clone(DEFAULT_SETTINGS), d.settings || {});
     }
   } catch (e) { /* 저장소 사용 불가: 메모리로만 동작 */ }
 }
 function saveLocal() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify({ routines: Store.routines, days: Store.days, settings: Store.settings })); }
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ routines: Store.routines, days: Store.days, weeks: Store.weeks, settings: Store.settings })); }
   catch (e) { toast('이 브라우저에 저장하지 못했어요. 저장 공간을 확인해 주세요.'); }
 }
 
@@ -613,6 +642,9 @@ function persist(kind, id) {
   } else if (kind === 'day') {
     const path = `${P.days}/${id}`;
     queueWrite(path, () => { const d = Store.days[id]; return d ? db.doc(path).set(clone(d)) : db.doc(path).delete(); });
+  } else if (kind === 'week') {
+    const path = `${P.weeks}/${id}`;
+    queueWrite(path, () => { const w = Store.weeks[id]; return w ? db.doc(path).set(clone(w)) : db.doc(path).delete(); });
   } else if (kind === 'settings') {
     queueWrite(P.settings, () => db.doc(P.settings).set(clone(Store.settings)));
   }
@@ -650,6 +682,11 @@ function subscribe(name) {
         Store.days = mergeColl(Store.days, snap.docs, P.days);
         Store.loaded.d = true; changed();
       }, onSnapError('days'));
+    } else if (name === 'weeks') {
+      Store.unsubs.weeks = db.collection(P.weeks).orderBy('week', 'desc').limit(150).onSnapshot(snap => {
+        Store.weeks = mergeColl(Store.weeks, snap.docs, P.weeks);
+        Store.loaded.w = true; changed();
+      }, onSnapError('weeks'));
     } else if (name === 'settings') {
       Store.unsubs.settings = db.doc(P.settings).onSnapshot(snap => {
         if (!isDirty(P.settings)) {
@@ -667,7 +704,7 @@ async function initStore() {
   } catch (e) { db = null; }
   if (db) {
     Store.mode = 'db'; Store.db = db;
-    subscribe('routines'); subscribe('days'); subscribe('settings');
+    subscribe('routines'); subscribe('days'); subscribe('weeks'); subscribe('settings');
   } else {
     Store.mode = 'local'; loadLocal();
   }
@@ -716,7 +753,18 @@ function pendingPast(k) {
   }
   return out;
 }
-const hasExamples = () => Object.values(Store.routines).some(r => r.example) ||
+/* 이번 주 할일: 월요일 날짜를 주 키로 사용 */
+function weekKey(k) { const d = parseKey(k); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return dkey(d); }
+function getWeek(wk) {
+  if (!Store.weeks[wk]) Store.weeks[wk] = { week: wk, tasks: {} };
+  const w = Store.weeks[wk]; w.tasks = w.tasks || {}; w.week = wk; return w;
+}
+const byDue = (a, b) => (a.due || '9999').localeCompare(b.due || '9999') || (a.order || 0) - (b.order || 0);
+function weekTasks(wk) { const w = Store.weeks[wk]; return w && w.tasks ? Object.values(w.tasks).sort(byDue) : []; }
+function weekStats(wk) { const ts = weekTasks(wk).filter(t => !t.movedTo); return { total: ts.length, done: ts.filter(t => t.done).length }; }
+const weekDueOn = k => weekTasks(weekKey(k)).filter(t => t.due === k && !t.movedTo);
+const weekPendingPrev = wk => { const pw = addDays(wk, -7); return weekTasks(pw).filter(t => !t.done && !t.movedTo).map(t => ({ wk: pw, t })); };
+const hasExamples = () => Object.values(Store.weeks).some(w => Object.values(w.tasks || {}).some(t => t.example)) || Object.values(Store.routines).some(r => r.example) ||
   Object.values(Store.days).some(d => Object.values(d.tasks || {}).some(t => t.example));
 function daysLabel(days) {
   if (!days || !days.length || days.length === 7) return '';
@@ -768,7 +816,36 @@ function carryOver() {
   touched.forEach(k => persist('day', k));
   toast(`${n}개를 오늘 할일로 가져왔어요.`);
 }
+function toggleWeek(wk, id) {
+  const t = Store.weeks[wk] && Store.weeks[wk].tasks[id];
+  if (!t || t.movedTo) return;
+  t.done = !t.done; t.doneAt = t.done ? new Date().toISOString() : null;
+  persist('week', wk);
+}
+function addWeekTask(wk, title, due) {
+  const w = getWeek(wk); const id = uid();
+  w.tasks[id] = { id, title, due: due || null, time: null, done: false, doneAt: null, order: Date.now(), createdAt: new Date().toISOString() };
+  persist('week', wk);
+}
+function carryWeek() {
+  const wk = weekKey(todayKey); const items = weekPendingPrev(wk); if (!items.length) return;
+  const w = getWeek(wk); let n = 0;
+  for (const { wk: pw, t } of items) {
+    const nid = uid();
+    const copy = Object.assign({}, t, { id: nid, from: t.from || pw, due: null, time: null, done: false, doneAt: null, order: Date.now() + n });
+    delete copy.movedTo;
+    w.tasks[nid] = copy;
+    Store.weeks[pw].tasks[t.id].movedTo = wk; n++;
+  }
+  persist('week', addDays(wk, -7)); persist('week', wk);
+  toast(`지난주 할일 ${n}개를 이번 주로 가져왔어요.`);
+}
 function clearExamples() {
+  for (const [wk, w] of Object.entries(Store.weeks)) {
+    let ch = false;
+    for (const [id, t] of Object.entries(w.tasks || {})) if (t.example) { delete w.tasks[id]; ch = true; }
+    if (ch) persist('week', wk);
+  }
   for (const [id, r] of Object.entries(Store.routines)) if (r.example) { delete Store.routines[id]; persist('routine', id); }
   for (const [k, d] of Object.entries(Store.days)) {
     let ch = false;
@@ -794,7 +871,7 @@ function changed() {
   setTimeout(() => { renderPending = false; renderAll(); }, 0);
 }
 function renderAll() {
-  renderHero(); renderTimeline(); renderRoutines(); renderTasks(); renderCalendar();
+  renderHero(); renderTimeline(); renderRoutines(); renderTasks(); renderWeek(); renderCalendar();
   renderNotice(); renderFoot(); renderSoundPill(); renderNext(new Date(), true);
   if (ringState) renderRing();
 }
@@ -832,7 +909,8 @@ function renderHero() {
   $('#p-barwrap').setAttribute('aria-valuenow', pct);
   $('#p-label').textContent = viewDate === todayKey ? '오늘 완료' : '이 날 완료';
   const msg = st.total && st.done === st.total ? `<span class="prog-msg">${viewDate === todayKey ? '오늘 할일을 모두 끝냈어요' : '이 날 할일을 모두 끝냈어요'}</span>` : '';
-  $('#p-split').innerHTML = `<span>고정 <b>${st.rDone}/${st.rTotal}</b></span><span>${viewDate === todayKey ? '오늘' : '이 날'} 할일 <b>${st.tDone}/${st.tTotal}</b></span>${msg}`;
+  const ws = isLoaded() ? weekStats(weekKey(viewDate)) : { total: 0, done: 0 };
+  $('#p-split').innerHTML = `<span>고정 <b>${st.rDone}/${st.rTotal}</b></span><span>${viewDate === todayKey ? '오늘' : '이 날'} 할일 <b>${st.tDone}/${st.tTotal}</b></span><span>${weekKey(viewDate) === weekKey(todayKey) ? '이번 주' : '그 주'} <b>${ws.done}/${ws.total}</b></span>${msg}`;
 }
 function renderClock(now) {
   $('#clock-hm').textContent = hm(now);
@@ -910,6 +988,50 @@ function renderTasks() {
   if (pend.length) { carry.innerHTML = `${ICON.inbox}<span>지난 2주 미완료 ${pend.length}개 오늘로 가져오기</span>`; carry.hidden = false; }
   else carry.hidden = true;
 }
+let weekOptsKey = '';
+function weekTitle(wk) {
+  const cur = weekKey(todayKey);
+  if (wk === cur) return '이번 주 할일';
+  if (wk === addDays(cur, -7)) return '지난주 할일';
+  if (wk === addDays(cur, 7)) return '다음 주 할일';
+  return `${md(wk)} 주 할일`;
+}
+function dueChips(t) {
+  if (!t.due || t.movedTo) return '';
+  const d = parseKey(t.due); const base = `${WD[d.getDay()]} ${md(t.due)} 마감`;
+  if (!t.done && t.due < todayKey) return `<span class="chip late">${base} · 지남</span>`;
+  if (!t.done && t.due === todayKey) return `<span class="chip late">오늘 마감</span>`;
+  return `<span class="chip soft">${base}</span>`;
+}
+function weekItemHTML(t, editable) {
+  return itemHTML({
+    kind: 'week', id: t.id, title: t.title, time: t.due ? t.time : null, done: t.done, doneAt: t.doneAt, moved: !!t.movedTo, example: t.example, editable,
+    late: t.due === todayKey && t.time && !t.done && toMin(t.time) < curMin(),
+    extra: dueChips(t) + (t.from ? '<span class="chip soft">지난주에서 이월</span>' : '') + (t.movedTo ? '<span class="chip soft">다음 주로 넘김</span>' : '')
+  });
+}
+function renderWeek() {
+  const wk = weekKey(viewDate); const sun = addDays(wk, 6);
+  $('#week-title').textContent = weekTitle(wk);
+  $('#week-sub').textContent = `${md(wk)}(월) ~ ${md(sun)}(일) · 이 주 안에 끝내면 되는 일`;
+  $('#new-week').placeholder = `${weekTitle(wk)} 입력 후 Enter`;
+  if (weekOptsKey !== wk) {
+    weekOptsKey = wk;
+    $('#new-week-due').innerHTML = '<option value="">마감 없음</option>' +
+      [0, 1, 2, 3, 4, 5, 6].map(i => { const k = addDays(wk, i); return `<option value="${k}">${WD[parseKey(k).getDay()]} ${md(k)}까지</option>`; }).join('');
+  }
+  const el = $('#week-list'); const carry = $('#week-carry');
+  if (!isLoaded()) { el.innerHTML = '<li class="empty">불러오는 중…</li>'; $('#w-count').textContent = ''; carry.hidden = true; return; }
+  const ts = weekTasks(wk);
+  el.innerHTML = ts.length ? ts.map(t => weekItemHTML(t, true)).join('')
+    : `<li class="empty">이 주 안에 끝낼 일을 적어두세요.<br>마감 요일을 고르면 그날 '오늘 마감'으로 표시돼요.</li>`;
+  const ws = weekStats(wk); const pct = ws.total ? Math.round(ws.done / ws.total * 100) : 0;
+  $('#w-count').textContent = ws.total ? `${ws.done}/${ws.total}` : '';
+  $('#w-bar').style.width = pct + '%'; $('#w-barwrap').setAttribute('aria-valuenow', pct);
+  const pend = wk === weekKey(todayKey) ? weekPendingPrev(wk) : [];
+  if (pend.length) { carry.innerHTML = `${ICON.inbox}<span>지난주 미완료 ${pend.length}개 이번 주로 가져오기</span>`; carry.hidden = false; }
+  else carry.hidden = true;
+}
 function renderCalendar() {
   $('#cal-title').textContent = `${calY}년 ${calM + 1}월`;
   const first = new Date(calY, calM, 1);
@@ -930,7 +1052,7 @@ function renderCalendar() {
     if (d.getDay() === 0) cls += ' sun';
     let mark;
     if (past && st.total) mark = `<span class="cal-bar"><i style="width:${Math.round(st.done / st.total * 100)}%"></i></span>`;
-    else if (!past && tasksFor(k).length) mark = '<span class="cal-dot"></span>';
+    else if (!past && (tasksFor(k).length || (isLoaded() && weekDueOn(k).length))) mark = '<span class="cal-dot"></span>';
     else mark = '<span class="cal-bar is-none"></span>';
     const label = `${d.getMonth() + 1}월 ${d.getDate()}일${st.total ? `, ${st.total}개 중 ${st.done}개 완료` : ''}`;
     html += `<button type="button" class="${cls}" data-date="${k}" aria-label="${label}"${k === viewDate ? ' aria-current="date"' : ''}><span class="cal-num">${d.getDate()}</span>${mark}</button>`;
@@ -967,6 +1089,7 @@ function upcoming(now) {
     for (const r of routinesFor(todayKey)) if (r.time && !checks[r.id]) consider(at(todayKey, r.time), r.title);
     for (const t of tasksFor(todayKey)) if (t.time && !t.done && !t.movedTo) consider(at(todayKey, t.time), t.title);
   }
+  if (S().taskAlerts && isLoaded()) for (const t of weekDueOn(todayKey)) if (t.time && !t.done) consider(at(todayKey, t.time), t.title);
   if (snooze) consider(snooze.until, '다시 알림');
   return best;
 }
@@ -1072,6 +1195,7 @@ function dueEvents(from, to) {
       const checks = (Store.days[k] && Store.days[k].checks) || {};
       for (const r of routinesFor(k)) if (r.time && !checks[r.id]) { const ts = at(k, r.time); if (ts > from && ts <= to) ev.push({ kind: 'task', time: r.time, label: r.title }); }
       for (const t of tasksFor(k)) if (t.time && !t.done && !t.movedTo) { const ts = at(k, t.time); if (ts > from && ts <= to) ev.push({ kind: 'task', time: t.time, label: t.title }); }
+      for (const t of weekDueOn(k)) if (t.time && !t.done) { const ts = at(k, t.time); if (ts > from && ts <= to) ev.push({ kind: 'task', time: t.time, label: t.title }); }
     }
   }
   return ev;
@@ -1111,11 +1235,13 @@ function renderRing() {
   const k = todayKey; const checks = (Store.days[k] && Store.days[k].checks) || {};
   const rs = routinesFor(k).filter(r => !checks[r.id]);
   const ts = tasksFor(k).filter(t => !t.done && !t.movedTo);
-  const n = rs.length + ts.length;
+  const wts = weekTasks(weekKey(k)).filter(t => !t.done && !t.movedTo);
+  const n = rs.length + ts.length + wts.length;
   $('#ring-remain-title').textContent = n ? `오늘 남은 할일 ${n}개` : '오늘 할일을 모두 끝냈어요';
   $('#ring-list').innerHTML =
     rs.map(r => itemHTML({ kind: 'routine', id: r.id, title: r.title, time: r.time, done: false, editable: false })).join('') +
-    ts.map(t => itemHTML({ kind: 'task', id: t.id, title: t.title, time: t.time, done: false, editable: false })).join('');
+    ts.map(t => itemHTML({ kind: 'task', id: t.id, title: t.title, time: t.time, done: false, editable: false })).join('') +
+    wts.map(t => itemHTML({ kind: 'week', id: t.id, title: t.title, time: null, done: false, editable: false, extra: '<span class="chip soft">이번 주</span>' + dueChips(t) })).join('');
   let note = '';
   if (!Sound.ready) note = '소리가 꺼져 있어요. 이 창을 한 번 누르면 소리가 켜져요.';
   else if (!Sound.looping && S().ringMode !== 'until') note = '1분이 지나 소리를 멈췄어요.';
@@ -1167,21 +1293,23 @@ function renderDays() {
 }
 function disarmDelete() { delArmed = false; const b = $('#f-delete'); b.classList.remove('armed'); b.textContent = '삭제'; }
 function openItem(kind, id) {
-  const isR = kind === 'routine';
-  const src = id ? (isR ? Store.routines[id] : (Store.days[viewDate] && Store.days[viewDate].tasks[id])) : null;
+  const isR = kind === 'routine'; const isW = kind === 'week'; const wk = weekKey(viewDate);
+  const src = id ? (isR ? Store.routines[id] : isW ? (Store.weeks[wk] && Store.weeks[wk].tasks[id]) : (Store.days[viewDate] && Store.days[viewDate].tasks[id])) : null;
   if (id && !src) return;
-  itemCtx = { kind, id: id || null, date: viewDate };
-  $('#item-dlg-title').textContent = isR ? (id ? '고정 할일 수정' : '고정 할일 추가') : '할일 수정';
+  itemCtx = { kind, id: id || null, date: viewDate, wk };
+  $('#item-dlg-title').textContent = isR ? (id ? '고정 할일 수정' : '고정 할일 추가') : isW ? `${weekTitle(wk)} 수정` : '할일 수정';
+  $('#f-date-label').innerHTML = isW ? '마감일 <em>(선택)</em>' : '날짜';
   $('#f-title').value = src ? src.title : '';
   $('#f-time').value = (src && src.time) || '';
   $('#f-days-wrap').hidden = !isR;
   $('#f-date-wrap').hidden = isR;
-  $('#f-date').value = viewDate;
+  $('#f-date').value = isW ? ((src && src.due) || '') : viewDate;
   draftDays = isR ? (src && src.days && src.days.length ? [...src.days] : [1, 2, 3, 4, 5]) : [];
   renderDays();
   $('#f-delete').hidden = !id; disarmDelete();
   $('#f-hint').textContent = isR
     ? (!id && viewDate < todayKey ? '새 고정 할일은 오늘부터 적용돼요. 시간을 넣으면 아직 안 했을 때 알림이 울려요.' : '시간을 넣으면 그 시간에 아직 안 했을 때만 알림이 울려요.')
+    : isW ? '마감일을 정하면 그날 \'오늘 마감\'으로 표시되고, 시간까지 넣으면 그 시간에 알림이 울려요. 다른 주 날짜를 고르면 그 주로 옮겨져요.'
     : '날짜를 바꾸면 그 날로 옮겨져요.';
   const dlg = $('#dlg-item'); try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); }
   setTimeout(() => $('#f-title').focus(), 0);
@@ -1208,6 +1336,16 @@ $('#item-form').addEventListener('submit', e => {
     base.title = title; base.time = time; base.days = [...draftDays].sort(); delete base.example;
     saveRoutine(base);
     toast(itemCtx.id ? '고정 할일을 고쳤어요.' : '고정 할일을 추가했어요.');
+  } else if (itemCtx.kind === 'week') {
+    const from = itemCtx.wk;
+    if (!Store.weeks[from] || !Store.weeks[from].tasks[itemCtx.id]) { closeItem(); return; }
+    const due = $('#f-date').value || null;
+    const t = Object.assign({}, Store.weeks[from].tasks[itemCtx.id], { title, due, time: due ? time : null }); delete t.example;
+    const to = due ? weekKey(due) : from;
+    if (to !== from) {
+      delete Store.weeks[from].tasks[itemCtx.id]; getWeek(to).tasks[t.id] = t;
+      persist('week', from); persist('week', to); toast(`${md(to)} 주로 옮겼어요.`);
+    } else { Store.weeks[from].tasks[t.id] = t; persist('week', from); toast('할일을 고쳤어요.'); }
   } else {
     const from = itemCtx.date; const to = $('#f-date').value || from;
     if (!Store.days[from] || !Store.days[from].tasks[itemCtx.id]) { closeItem(); return; }
@@ -1224,6 +1362,7 @@ $('#f-delete').addEventListener('click', () => {
   if (!itemCtx || !itemCtx.id) return;
   if (!delArmed) { delArmed = true; const b = $('#f-delete'); b.classList.add('armed'); b.textContent = '한 번 더 누르면 삭제'; return; }
   if (itemCtx.kind === 'routine') deleteRoutine(itemCtx.id);
+  else if (itemCtx.kind === 'week') { if (Store.weeks[itemCtx.wk]) { delete Store.weeks[itemCtx.wk].tasks[itemCtx.id]; persist('week', itemCtx.wk); } }
   else { delete Store.days[itemCtx.date].tasks[itemCtx.id]; persist('day', itemCtx.date); }
   toast('삭제했어요.'); closeItem();
 });
@@ -1337,6 +1476,20 @@ $('#cal-grid').addEventListener('click', e => { const b = e.target.closest('[dat
 $('#add-routine').addEventListener('click', () => openItem('routine', null));
 $('#clear-ex').addEventListener('click', clearExamples);
 $('#carry-btn').addEventListener('click', carryOver);
+$('#week-carry').addEventListener('click', carryWeek);
+$('#add-week-form').addEventListener('submit', e => {
+  e.preventDefault();
+  if (!isLoaded()) return;
+  const title = $('#new-week').value.trim(); if (!title) { $('#new-week').focus(); return; }
+  addWeekTask(weekKey(viewDate), title, $('#new-week-due').value || null);
+  $('#new-week').value = ''; $('#new-week-due').value = ''; $('#new-week').focus();
+});
+$('#week-list').addEventListener('click', e => {
+  const act = e.target.closest('[data-act]'); if (!act) return;
+  const li = act.closest('li[data-id]'); if (!li) return;
+  if (act.dataset.act === 'toggle') toggleWeek(weekKey(viewDate), li.dataset.id);
+  else if (act.dataset.act === 'edit') openItem('week', li.dataset.id);
+});
 $('#add-task-form').addEventListener('submit', e => {
   e.preventDefault();
   if (!isLoaded()) return;
@@ -1363,7 +1516,9 @@ $('#task-list').addEventListener('click', e => {
 $('#ring-list').addEventListener('click', e => {
   const act = e.target.closest('[data-act="toggle"]'); if (!act) return;
   const li = act.closest('li[data-id]'); if (!li) return;
-  if (li.dataset.kind === 'routine') toggleRoutine(todayKey, li.dataset.id); else toggleTask(todayKey, li.dataset.id);
+  if (li.dataset.kind === 'routine') toggleRoutine(todayKey, li.dataset.id);
+  else if (li.dataset.kind === 'week') toggleWeek(weekKey(todayKey), li.dataset.id);
+  else toggleTask(todayKey, li.dataset.id);
 });
 $('#ring-ok').addEventListener('click', stopRing);
 $('#ring-snooze').addEventListener('click', snoozeRing);
