@@ -521,7 +521,7 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
         <p class="hint">불러오면 지금 기록이 이 백업(<b id="bk-confirm-date"></b>) 내용으로 바뀌어요. 폴더가 연결돼 있으면 바꾸기 전 기록을 먼저 따로 저장해 둬요.</p>
         <div class="bk-row"><button type="button" class="btn sm danger armed" id="bk-apply">불러오기</button><button type="button" class="btn sm" id="bk-cancel">취소</button></div>
       </div>
-      <p class="hint">하루에 한 파일(아침체크보드-백업-날짜.json)로 저장돼요. 할일을 바꿀 때마다 그날 파일이 새로 덮어써지고, 최근 30일치만 남겨요.</p>
+      <p class="hint">폴더를 정하면 하루 한 파일(아침체크보드-백업-날짜.json)로 저장되고, 할일을 바꿀 때마다 그날 파일이 새로 덮어써져요. 최근 30일치만 남겨요.</p>
     </section>
     <div class="dlg-actions">
       <span class="spacer"></span>
@@ -1478,6 +1478,7 @@ $('#s-cancel').addEventListener('click', closeSettings);
 
 /* ---------- 자동 백업 (폴더 연결: File System Access API) ---------- */
 const LB_KEY = 'morning-checkboard:lastBackup';
+const LD_KEY = 'morning-checkboard:lastDownloadDay';
 const BK_RE = /^아침체크보드-백업-\d{4}-\d{2}-\d{2}\.json$/;
 const IDB = {
   open() { return new Promise((res, rej) => { const q = indexedDB.open('morning-checkboard', 1); q.onupgradeneeded = () => q.result.createObjectStore('kv'); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); },
@@ -1489,6 +1490,17 @@ const Backup = {
   supported: (() => { try { return 'showDirectoryPicker' in window && window.isSecureContext && window.self === window.top; } catch (e) { return false; } })(),
   dir: null, perm: 'none', asked: false, timer: null,
   lastAt: (() => { try { return localStorage.getItem(LB_KEY) || ''; } catch (e) { return ''; } })(),
+  lastDlDay: (() => { try { return localStorage.getItem(LD_KEY) || ''; } catch (e) { return ''; } })(),
+  hasData() { return Object.keys(Store.routines).length + Object.keys(Store.days).length + Object.keys(Store.weeks).length > 0; },
+  /* 폴더를 안 정했거나 허용이 안 됐을 때: 하루 한 번 '다운로드' 폴더에 저장 (그날 첫 클릭 때) */
+  dailyDownload() {
+    if (Store.mode !== 'local' || !isLoaded() || !this.hasData() || this.lastDlDay === todayKey) return;
+    if (this.dir && this.perm === 'granted') return;
+    this.download();
+    this.lastDlDay = todayKey; this.lastAt = new Date().toISOString();
+    try { localStorage.setItem(LD_KEY, todayKey); localStorage.setItem(LB_KEY, this.lastAt); } catch (e) {}
+    renderBackup(); toast('오늘 백업 파일을 다운로드 폴더에 저장했어요.');
+  },
   data() { return { app: '아침 체크보드', version: 1, exportedAt: new Date().toISOString(), routines: Store.routines, days: Store.days, weeks: Store.weeks, settings: Store.settings }; },
   async init() {
     if (Store.mode !== 'local' || !this.supported) { renderBackup(); return; }
@@ -1556,10 +1568,10 @@ function renderBackup() {
   sec.hidden = false; foot.hidden = false;
   const last = Backup.lastAt ? fmtDT(Backup.lastAt) : '';
   let st, ft, warn = false;
-  if (!Backup.supported) {
-    st = '이 브라우저에서는 폴더 자동 백업을 쓸 수 없어요. [파일로 받기]로 직접 저장해 주세요.'; ft = '자동 백업 사용 불가 · 설정에서 파일로 받기'; warn = true;
-  } else if (!Backup.dir) {
-    st = '아직 백업 폴더를 정하지 않았어요. [백업 폴더 지정]으로 폴더를 고르면 그때부터 자동으로 저장돼요.'; ft = '자동 백업 꺼짐 · 눌러서 폴더 지정'; warn = true;
+  const dlDone = Backup.lastDlDay ? ` · 마지막 ${md(Backup.lastDlDay)}` : '';
+  if (!Backup.supported || !Backup.dir) {
+    st = `기본 백업: 하루 한 번, 그날 처음 화면을 누를 때 '다운로드' 폴더에 백업 파일을 저장해요${dlDone}.` + (Backup.supported ? ' [백업 폴더 지정]으로 원하는 폴더를 정하면 그 폴더에 바로 저장돼요.' : '');
+    ft = `자동 백업: 다운로드 폴더${dlDone}`;
   } else if (Backup.perm !== 'granted') {
     st = `'${Backup.dir.name}' 폴더 접근을 다시 허용해야 해요. 화면을 한 번 누르면 허용 창이 떠요. '방문할 때마다 허용'을 고르면 다음부턴 묻지 않아요.`; ft = '자동 백업 대기 · 눌러서 허용'; warn = true;
   } else {
@@ -1576,7 +1588,7 @@ $('#bk-choose').addEventListener('click', () => Backup.choose());
 $('#bk-now').addEventListener('click', () => Backup.write(true));
 $('#bk-download').addEventListener('click', () => Backup.download());
 $('#bk-foot').addEventListener('click', async () => {
-  if (!Backup.supported) { openSettings(); return; }
+  if (!Backup.supported) { Backup.download(); return; }
   if (!Backup.dir) { await Backup.choose(); return; }
   if (Backup.perm !== 'granted') { if (await Backup.ensure(true)) Backup.write(true); return; }
   Backup.write(true);
@@ -1607,7 +1619,10 @@ $('#bk-apply').addEventListener('click', async () => {
 /* ---------- 화면 이벤트 ---------- */
 document.addEventListener('pointerdown', () => {
   if (!Sound.ready) Sound.unlock();
-  if (Backup.dir && Backup.perm !== 'granted' && !Backup.asked) { Backup.asked = true; Backup.ensure(true).then(ok => { if (ok) Backup.write(false); }); }
+  if (Backup.dir && Backup.perm !== 'granted' && !Backup.asked) {
+    Backup.asked = true;
+    Backup.ensure(true).then(ok => { if (ok) Backup.write(false); else Backup.dailyDownload(); });
+  } else if (!(Backup.dir && Backup.perm === 'granted')) Backup.dailyDownload();
 }, true);
 document.addEventListener('keydown', () => { if (!Sound.ready) Sound.unlock(); }, true);
 $('#sound-pill').addEventListener('click', async () => {
