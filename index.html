@@ -224,6 +224,10 @@ select.input{padding-right:8px;cursor:pointer}
 .foot span{display:inline-flex;align-items:center;gap:6px}
 .foot i{width:7px;height:7px;border-radius:50%;background:var(--faint)}
 .foot i.on{background:var(--ok)}
+.foot .link{font-weight:500;color:var(--muted)}
+.foot .link.warn{color:var(--warn);font-weight:600}
+.bk-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.restore-confirm{display:grid;gap:8px;padding:12px;border-radius:12px;background:var(--warn-soft)}
 
 /* 대화상자 */
 dialog.dlg{border:0;padding:0;border-radius:18px;background:var(--surface);color:var(--ink);width:min(500px,calc(100vw - 32px));max-height:calc(100vh - 32px);box-shadow:0 30px 80px -20px rgba(0,0,0,.45)}
@@ -431,6 +435,7 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
 
   <footer class="foot">
     <span><i id="store-dot"></i><span id="store-mode">저장소 연결 중…</span></span>
+    <button type="button" class="link" id="bk-foot" hidden></button>
     <span>알람은 이 화면이 열려 있을 때 울려요. 화면을 한 번 눌러야 소리가 켜져요.</span>
   </footer>
 </div>
@@ -501,6 +506,22 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
       <h3>바탕화면 알림</h3>
       <label class="check-row"><span class="switch"><input type="checkbox" id="s-notify"><span></span></span>다른 창을 보고 있을 때도 알림 띄우기</label>
       <p class="hint" id="s-notify-status"></p>
+    </section>
+    <section class="set-sec" id="backup-sec" hidden>
+      <h3>자동 백업</h3>
+      <p class="hint" id="bk-status"></p>
+      <div class="bk-row">
+        <button type="button" class="btn sm" id="bk-choose">백업 폴더 지정</button>
+        <button type="button" class="btn sm" id="bk-now">지금 백업</button>
+        <button type="button" class="btn sm" id="bk-download">파일로 받기</button>
+        <label class="btn sm" for="bk-file">백업 불러오기</label>
+        <input type="file" id="bk-file" accept=".json,application/json" hidden>
+      </div>
+      <div class="restore-confirm" id="bk-confirm" hidden>
+        <p class="hint">불러오면 지금 기록이 이 백업(<b id="bk-confirm-date"></b>) 내용으로 바뀌어요. 폴더가 연결돼 있으면 바꾸기 전 기록을 먼저 따로 저장해 둬요.</p>
+        <div class="bk-row"><button type="button" class="btn sm danger armed" id="bk-apply">불러오기</button><button type="button" class="btn sm" id="bk-cancel">취소</button></div>
+      </div>
+      <p class="hint">하루에 한 파일(아침체크보드-백업-날짜.json)로 저장돼요. 할일을 바꿀 때마다 그날 파일이 새로 덮어써지고, 최근 30일치만 남겨요.</p>
     </section>
     <div class="dlg-actions">
       <span class="spacer"></span>
@@ -633,7 +654,7 @@ function onWriteError(e) {
 
 function persist(kind, id) {
   changed();
-  if (Store.mode === 'local') { saveLocal(); return; }
+  if (Store.mode === 'local') { saveLocal(); Backup.schedule(); return; }
   if (Store.mode !== 'db') return;
   const db = Store.db;
   if (kind === 'routine') {
@@ -709,6 +730,7 @@ async function initStore() {
     Store.mode = 'local'; loadLocal();
   }
   renderAll();
+  Backup.init();
   Sound.unlock(); // 설치 앱 등 자동 재생이 허용된 환경이면 클릭 없이 소리가 켜짐
 }
 
@@ -872,7 +894,7 @@ function changed() {
 }
 function renderAll() {
   renderHero(); renderTimeline(); renderRoutines(); renderTasks(); renderWeek(); renderCalendar();
-  renderNotice(); renderFoot(); renderSoundPill(); renderNext(new Date(), true);
+  renderNotice(); renderFoot(); renderSoundPill(); renderBackup(); renderNext(new Date(), true);
   if (ringState) renderRing();
 }
 
@@ -1454,8 +1476,139 @@ $('#settings-form').addEventListener('submit', e => {
 });
 $('#s-cancel').addEventListener('click', closeSettings);
 
+/* ---------- 자동 백업 (폴더 연결: File System Access API) ---------- */
+const LB_KEY = 'morning-checkboard:lastBackup';
+const BK_RE = /^아침체크보드-백업-\d{4}-\d{2}-\d{2}\.json$/;
+const IDB = {
+  open() { return new Promise((res, rej) => { const q = indexedDB.open('morning-checkboard', 1); q.onupgradeneeded = () => q.result.createObjectStore('kv'); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); },
+  async get(k) { const db = await this.open(); return new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); },
+  async set(k, v) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+};
+const fmtDT = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()} ${hm(d)}`; };
+const Backup = {
+  supported: (() => { try { return 'showDirectoryPicker' in window && window.isSecureContext && window.self === window.top; } catch (e) { return false; } })(),
+  dir: null, perm: 'none', asked: false, timer: null,
+  lastAt: (() => { try { return localStorage.getItem(LB_KEY) || ''; } catch (e) { return ''; } })(),
+  data() { return { app: '아침 체크보드', version: 1, exportedAt: new Date().toISOString(), routines: Store.routines, days: Store.days, weeks: Store.weeks, settings: Store.settings }; },
+  async init() {
+    if (Store.mode !== 'local' || !this.supported) { renderBackup(); return; }
+    try {
+      this.dir = (await IDB.get('backupDir')) || null;
+      if (this.dir) this.perm = await this.dir.queryPermission({ mode: 'readwrite' });
+    } catch (e) { this.dir = null; }
+    renderBackup();
+    if (this.perm === 'granted') this.write(false);
+  },
+  async choose() {
+    if (!this.supported) return;
+    try {
+      const h = await window.showDirectoryPicker({ id: 'morning-backup', mode: 'readwrite', startIn: 'documents' });
+      this.dir = h; this.perm = 'granted';
+      try { await IDB.set('backupDir', h); } catch (e) {}
+      await this.write(true);
+    } catch (e) { if (e && e.name !== 'AbortError') toast('폴더를 연결하지 못했어요. 다른 폴더를 골라주세요.'); }
+    renderBackup();
+  },
+  async ensure(ask) {
+    if (!this.dir) return false;
+    let p = 'prompt';
+    try { p = await this.dir.queryPermission({ mode: 'readwrite' }); if (p !== 'granted' && ask) p = await this.dir.requestPermission({ mode: 'readwrite' }); } catch (e) {}
+    this.perm = p; renderBackup();
+    return p === 'granted';
+  },
+  async writeNamed(name, obj) {
+    const fh = await this.dir.getFileHandle(name, { create: true });
+    const w = await fh.createWritable(); await w.write(JSON.stringify(obj, null, 2)); await w.close();
+  },
+  async write(manual) {
+    if (!this.dir || !(await this.ensure(manual))) return false;
+    const name = `아침체크보드-백업-${todayKey}.json`;
+    try {
+      await this.writeNamed(name, this.data());
+      this.lastAt = new Date().toISOString();
+      try { localStorage.setItem(LB_KEY, this.lastAt); } catch (e) {}
+      await this.prune(); renderBackup();
+      if (manual) toast(`백업했어요: ${name}`);
+      return true;
+    } catch (e) { this.perm = 'prompt'; renderBackup(); if (manual) toast('백업 파일을 쓰지 못했어요. 폴더를 다시 지정해 주세요.'); return false; }
+  },
+  async prune() {
+    const names = [];
+    try { for await (const [n, h] of this.dir.entries()) if (h.kind === 'file' && BK_RE.test(n)) names.push(n); } catch (e) { return; }
+    names.sort();
+    for (let i = 0; i < names.length - 30; i++) { try { await this.dir.removeEntry(names[i]); } catch (e) {} }
+  },
+  schedule() {
+    if (Store.mode !== 'local' || !this.dir || this.perm !== 'granted') return;
+    clearTimeout(this.timer); this.timer = setTimeout(() => this.write(false), 4000);
+  },
+  download() {
+    try {
+      const blob = new Blob([JSON.stringify(this.data(), null, 2)], { type: 'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `아침체크보드-백업-${todayKey}.json`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    } catch (e) { toast('파일을 만들지 못했어요.'); }
+  }
+};
+function renderBackup() {
+  const sec = $('#backup-sec'); const foot = $('#bk-foot');
+  if (Store.mode !== 'local') { sec.hidden = true; foot.hidden = true; return; }
+  sec.hidden = false; foot.hidden = false;
+  const last = Backup.lastAt ? fmtDT(Backup.lastAt) : '';
+  let st, ft, warn = false;
+  if (!Backup.supported) {
+    st = '이 브라우저에서는 폴더 자동 백업을 쓸 수 없어요. [파일로 받기]로 직접 저장해 주세요.'; ft = '자동 백업 사용 불가 · 설정에서 파일로 받기'; warn = true;
+  } else if (!Backup.dir) {
+    st = '아직 백업 폴더를 정하지 않았어요. [백업 폴더 지정]으로 폴더를 고르면 그때부터 자동으로 저장돼요.'; ft = '자동 백업 꺼짐 · 눌러서 폴더 지정'; warn = true;
+  } else if (Backup.perm !== 'granted') {
+    st = `'${Backup.dir.name}' 폴더 접근을 다시 허용해야 해요. 화면을 한 번 누르면 허용 창이 떠요. '방문할 때마다 허용'을 고르면 다음부턴 묻지 않아요.`; ft = '자동 백업 대기 · 눌러서 허용'; warn = true;
+  } else {
+    st = `'${Backup.dir.name}' 폴더에 자동 저장 중${last ? ` · 마지막 백업 ${last}` : ''}`; ft = `자동 백업 켜짐${last ? ` · ${last}` : ''}`;
+  }
+  $('#bk-status').textContent = st;
+  foot.textContent = ft; foot.classList.toggle('warn', warn);
+  $('#bk-choose').hidden = !Backup.supported; $('#bk-now').hidden = !Backup.supported;
+  $('#bk-choose').textContent = Backup.dir ? '백업 폴더 바꾸기' : '백업 폴더 지정';
+  $('#bk-now').disabled = !Backup.dir;
+}
+let pendingRestore = null;
+$('#bk-choose').addEventListener('click', () => Backup.choose());
+$('#bk-now').addEventListener('click', () => Backup.write(true));
+$('#bk-download').addEventListener('click', () => Backup.download());
+$('#bk-foot').addEventListener('click', async () => {
+  if (!Backup.supported) { openSettings(); return; }
+  if (!Backup.dir) { await Backup.choose(); return; }
+  if (Backup.perm !== 'granted') { if (await Backup.ensure(true)) Backup.write(true); return; }
+  Backup.write(true);
+});
+$('#bk-file').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (!d || typeof d !== 'object' || !d.routines || !d.days) throw new Error('format');
+    pendingRestore = d;
+    $('#bk-confirm-date').textContent = d.exportedAt ? fmtDT(d.exportedAt) : f.name;
+    $('#bk-confirm').hidden = false;
+  } catch (err) { toast('아침 체크보드 백업 파일이 아니에요.'); }
+});
+$('#bk-cancel').addEventListener('click', () => { pendingRestore = null; $('#bk-confirm').hidden = true; });
+$('#bk-apply').addEventListener('click', async () => {
+  const d = pendingRestore; if (!d) return;
+  if (Backup.dir && Backup.perm === 'granted') {
+    try { await Backup.writeNamed(`아침체크보드-복원전-${todayKey}-${hm(new Date()).replace(':', '')}.json`, Backup.data()); } catch (e) {}
+  }
+  Store.routines = d.routines || {}; Store.days = d.days || {}; Store.weeks = d.weeks || {};
+  Store.settings = Object.assign(clone(DEFAULT_SETTINGS), d.settings || {});
+  saveLocal(); pendingRestore = null; $('#bk-confirm').hidden = true;
+  closeSettings(); changed(); Backup.schedule();
+  toast('백업을 불러왔어요.');
+});
+
 /* ---------- 화면 이벤트 ---------- */
-document.addEventListener('pointerdown', () => { if (!Sound.ready) Sound.unlock(); }, true);
+document.addEventListener('pointerdown', () => {
+  if (!Sound.ready) Sound.unlock();
+  if (Backup.dir && Backup.perm !== 'granted' && !Backup.asked) { Backup.asked = true; Backup.ensure(true).then(ok => { if (ok) Backup.write(false); }); }
+}, true);
 document.addEventListener('keydown', () => { if (!Sound.ready) Sound.unlock(); }, true);
 $('#sound-pill').addEventListener('click', async () => {
   const wasReady = Sound.ready;
@@ -1536,7 +1689,7 @@ function tick() {
   if (tk !== todayKey) {
     const follow = viewDate === todayKey; todayKey = tk;
     if (follow) { viewDate = tk; syncCal(); }
-    changed();
+    changed(); Backup.schedule();
   }
   if (isLoaded()) {
     const gap = ms - lastTick;
