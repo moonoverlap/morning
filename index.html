@@ -134,6 +134,11 @@ html.monitor .clock{font-size:clamp(3.6rem,8.6vw,7.6rem)}
   .board{grid-template-columns:repeat(3,minmax(0,1fr)) minmax(300px,360px)}
   .side{display:contents}
 }
+.wk-tabs{display:inline-flex;gap:2px;padding:3px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);flex:none}
+.wk-tab{border:0;background:transparent;padding:4px 10px;border-radius:7px;font-size:.8125rem;font-weight:600;color:var(--muted);cursor:pointer;display:inline-flex;gap:5px;align-items:center;white-space:nowrap}
+.wk-tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.wk-tab .n{font-size:.75rem;font-weight:700;color:var(--accent-text);font-variant-numeric:tabular-nums}
+.wk-tab .n:empty{display:none}
 .week-bar{height:6px;border-radius:999px;background:var(--tl-track);overflow:hidden}
 .week-bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:inherit;transition:width .45s ease}
 .add-row #new-week{flex:1 1 160px;min-width:0}
@@ -400,6 +405,10 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
         <div class="ttl">
           <h2 id="week-h"><span id="week-title">이번 주 할일</span> <span class="count" id="w-count"></span></h2>
           <p class="card-sub" id="week-sub">이 주 안에 끝내면 되는 일</p>
+        </div>
+        <div class="wk-tabs" role="tablist" aria-label="주 선택">
+          <button type="button" class="wk-tab" role="tab" id="wk-tab-0" data-off="0" aria-selected="true"><span id="wk-tab-0-l">이번 주</span><span class="n" id="wk-tab-0-n"></span></button>
+          <button type="button" class="wk-tab" role="tab" id="wk-tab-1" data-off="1" aria-selected="false"><span id="wk-tab-1-l">다음 주</span><span class="n" id="wk-tab-1-n"></span></button>
         </div>
       </header>
       <div class="week-bar" role="progressbar" aria-label="이번 주 완료율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="w-barwrap"><i id="w-bar"></i></div>
@@ -884,7 +893,9 @@ let viewDate = todayKey;
 let calY = 0, calM = 0;
 function syncCal() { const d = parseKey(viewDate); calY = d.getFullYear(); calM = d.getMonth(); }
 syncCal();
-function setView(k) { viewDate = k; syncCal(); renderAll(); }
+let weekOff = 0; // 0 = 보고 있는 날의 주, 1 = 그다음 주
+const cardWeek = () => addDays(weekKey(viewDate), 7 * weekOff);
+function setView(k) { viewDate = k; weekOff = 0; syncCal(); renderAll(); }
 
 let renderPending = false;
 function changed() {
@@ -1033,7 +1044,14 @@ function weekItemHTML(t, editable) {
   });
 }
 function renderWeek() {
-  const wk = weekKey(viewDate); const sun = addDays(wk, 6);
+  const base = weekKey(viewDate); const wk = cardWeek(); const sun = addDays(wk, 6);
+  [0, 1].forEach(i => {
+    const k = addDays(base, 7 * i); const t = $('#wk-tab-' + i);
+    t.setAttribute('aria-selected', String(weekOff === i));
+    $('#wk-tab-' + i + '-l').textContent = weekTitle(k).replace(' 할일', '');
+    const left = isLoaded() ? weekTasks(k).filter(x => !x.done && !x.movedTo).length : 0;
+    $('#wk-tab-' + i + '-n').textContent = left ? String(left) : '';
+  });
   $('#week-title').textContent = weekTitle(wk);
   $('#week-sub').textContent = `${md(wk)}(월) ~ ${md(sun)}(일) · 이 주 안에 끝내면 되는 일`;
   $('#new-week').placeholder = `${weekTitle(wk)} 입력 후 Enter`;
@@ -1315,7 +1333,7 @@ function renderDays() {
 }
 function disarmDelete() { delArmed = false; const b = $('#f-delete'); b.classList.remove('armed'); b.textContent = '삭제'; }
 function openItem(kind, id) {
-  const isR = kind === 'routine'; const isW = kind === 'week'; const wk = weekKey(viewDate);
+  const isR = kind === 'routine'; const isW = kind === 'week'; const wk = cardWeek();
   const src = id ? (isR ? Store.routines[id] : isW ? (Store.weeks[wk] && Store.weeks[wk].tasks[id]) : (Store.days[viewDate] && Store.days[viewDate].tasks[id])) : null;
   if (id && !src) return;
   itemCtx = { kind, id: id || null, date: viewDate, wk };
@@ -1645,17 +1663,21 @@ $('#add-routine').addEventListener('click', () => openItem('routine', null));
 $('#clear-ex').addEventListener('click', clearExamples);
 $('#carry-btn').addEventListener('click', carryOver);
 $('#week-carry').addEventListener('click', carryWeek);
+document.querySelector('.wk-tabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-off]'); if (!b) return;
+  weekOff = Number(b.dataset.off); renderWeek(); $('#new-week').focus();
+});
 $('#add-week-form').addEventListener('submit', e => {
   e.preventDefault();
   if (!isLoaded()) return;
   const title = $('#new-week').value.trim(); if (!title) { $('#new-week').focus(); return; }
-  addWeekTask(weekKey(viewDate), title, $('#new-week-due').value || null);
+  addWeekTask(cardWeek(), title, $('#new-week-due').value || null);
   $('#new-week').value = ''; $('#new-week-due').value = ''; $('#new-week').focus();
 });
 $('#week-list').addEventListener('click', e => {
   const act = e.target.closest('[data-act]'); if (!act) return;
   const li = act.closest('li[data-id]'); if (!li) return;
-  if (act.dataset.act === 'toggle') toggleWeek(weekKey(viewDate), li.dataset.id);
+  if (act.dataset.act === 'toggle') toggleWeek(cardWeek(), li.dataset.id);
   else if (act.dataset.act === 'edit') openItem('week', li.dataset.id);
 });
 $('#add-task-form').addEventListener('submit', e => {
