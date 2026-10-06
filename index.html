@@ -128,12 +128,27 @@ html.monitor .clock{font-size:clamp(3.6rem,8.6vw,7.6rem)}
 .notice b{color:var(--ink)}
 
 /* 보드 */
-.board{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(300px,380px);gap:18px;align-items:start}
-.side{display:grid;gap:18px;min-width:0;align-content:start}
-@media (min-width:1500px){
-  .board{grid-template-columns:repeat(3,minmax(0,1fr)) minmax(300px,360px)}
-  .side{display:contents}
-}
+.board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;align-items:start}
+.board>[data-block]{grid-column:span 1;min-width:0;position:relative}
+.board>[data-size="m"]{grid-column:span 2}
+.board>[data-size="l"]{grid-column:1/-1}
+@media (max-width:1499px){.board{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:1179px){.board{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:759px){.board{grid-template-columns:minmax(0,1fr)}.board>[data-size="m"]{grid-column:span 1}}
+/* 배치 편집 */
+.blk-tools{display:none}
+.layout-edit .board>[data-block]{outline:2px dashed var(--accent-line);outline-offset:3px;cursor:grab}
+.layout-edit .board>[data-block]>*:not(.blk-tools){pointer-events:none;user-select:none}
+.layout-edit .board>[data-block].dragging{opacity:.45}
+.layout-edit .blk-tools{display:flex;position:absolute;top:10px;right:10px;z-index:5;gap:4px;align-items:center;padding:4px;border-radius:10px;background:var(--surface);border:1px solid var(--accent-line);box-shadow:var(--shadow)}
+.blk-tools .bt{height:28px;min-width:28px;padding:0 8px;border-radius:7px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font-size:.75rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap}
+.blk-tools .bt:hover{border-color:var(--accent)}
+.blk-tools .bt[disabled]{opacity:.4;cursor:default}
+.blk-tools .grip{cursor:grab;color:var(--muted);border:0;background:transparent;font-size:1rem;letter-spacing:-2px}
+.blk-tools .nm{font-size:.75rem;font-weight:700;color:var(--accent-text);padding:0 4px}
+.layout-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:12px 16px;border-radius:var(--r-md);background:var(--accent-soft);border:1px solid var(--accent-line);font-size:.875rem;position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
+.layout-bar p{margin:0;flex:1 1 280px;min-width:0;color:var(--ink)}
+.layout-bar .hidden-list{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .wk-tabs{display:inline-flex;gap:2px;padding:3px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);flex:none}
 .wk-tab{border:0;background:transparent;padding:4px 10px;border-radius:7px;font-size:.8125rem;font-weight:600;color:var(--muted);cursor:pointer;display:inline-flex;gap:5px;align-items:center;white-space:nowrap}
 .wk-tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.1)}
@@ -319,16 +334,10 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,16px);background:var(--ink);color:var(--surface);padding:11px 16px;border-radius:11px;font-size:.875rem;font-weight:500;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:50;max-width:calc(100vw - 32px);text-align:center}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
-@media (max-width:1180px){
-  .board{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
-  .side{grid-column:1/-1;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}
-}
 @media (max-width:860px){
   .hero{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:760px){
-  .board{grid-template-columns:minmax(0,1fr)}
-  .side{grid-template-columns:minmax(0,1fr)}
   .card{padding:16px}
   .actions{width:100%}
   .actions .btn,.actions .pill{flex:1 1 auto}
@@ -347,50 +356,58 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
     </div>
     <div class="actions">
       <button type="button" class="pill off" id="sound-pill"><span class="dot" aria-hidden="true"></span><span id="sound-pill-text">알람 소리 꺼짐 · 눌러서 켜기</span></button>
+      <button type="button" class="btn" id="layout-btn" aria-pressed="false"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="3" width="6.5" height="6.5" rx="1.5"/><rect x="11" y="3" width="6.5" height="6.5" rx="1.5"/><rect x="2.5" y="11" width="15" height="6" rx="1.5"/></svg>배치</button>
       <button type="button" class="btn" id="open-settings"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8a5 5 0 0 1 10 0v3.4l1.5 2.6h-13L5 11.4z"/><path d="M8 16.5a2 2 0 0 0 4 0"/></svg>알람 설정</button>
       <button type="button" class="btn primary" id="monitor-btn" aria-pressed="false"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="10" rx="1.6"/><path d="M7 17h6M10 13.5V17"/></svg><span id="monitor-text">모니터 모드</span></button>
     </div>
   </header>
 
-  <section class="hero" aria-label="오늘 현황">
-    <div class="hero-left">
-      <div class="hero-date"><span id="hero-date">날짜</span><span class="badge" id="hero-badge">오늘</span></div>
-      <div class="clock" id="clock" aria-label="현재 시각"><span id="clock-hm">--:--</span><span class="sec" id="clock-s">:--</span></div>
-      <div class="daynav">
-        <button type="button" class="hbtn" id="prev-day" aria-label="이전 날">‹ 이전</button>
-        <button type="button" class="hbtn" id="go-today">오늘</button>
-        <button type="button" class="hbtn" id="next-day" aria-label="다음 날">다음 ›</button>
-        <input type="date" class="hdate" id="jump-date" aria-label="날짜로 이동">
-      </div>
-    </div>
-    <div class="hero-right">
-      <div class="prog-head">
-        <span class="prog-num"><span id="p-done">0</span><small> / <span id="p-total">0</span></small></span>
-        <span class="prog-label" id="p-label">오늘 완료</span>
-        <span class="prog-pct" id="p-pct">0%</span>
-      </div>
-      <div class="prog-bar" id="p-barwrap" role="progressbar" aria-label="완료율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="p-bar"></i></div>
-      <div class="prog-split" id="p-split"></div>
-      <div class="next" id="next-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8a5 5 0 0 1 10 0v3.4l1.5 2.6h-13L5 11.4z"/><path d="M8 16.5a2 2 0 0 0 4 0"/></svg><span id="next-text">알람을 확인하는 중…</span></div>
-    </div>
-    <div class="tl-wrap">
-      <div class="timeline" id="timeline" aria-hidden="true"></div>
-      <div class="tl-legend" aria-hidden="true">
-        <span><i></i>시간 정한 할일</span>
-        <span><i class="f"></i>완료</span>
-        <span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8a5 5 0 0 1 10 0v3.4l1.5 2.6h-13L5 11.4z"/><path d="M8 16.5a2 2 0 0 0 4 0"/></svg>알람</span>
-      </div>
-      <p class="sr-only" id="timeline-sr"></p>
-    </div>
-  </section>
 
   <div class="notice" id="ex-notice" hidden>
     <p><b>예시</b> 표시가 붙은 항목은 샘플이에요. 수정하면 내 항목이 되고, 필요 없으면 한 번에 지울 수 있어요.</p>
     <button type="button" class="btn sm" id="clear-ex">예시 모두 지우기</button>
   </div>
 
-  <main class="board">
-    <section class="card" aria-labelledby="r-title">
+  <div class="layout-bar" id="layout-bar" hidden>
+    <p><b>배치 편집 중</b> · 카드를 끌어서 옮기거나 ‹ › 로 순서를 바꾸고, 폭 버튼으로 크기를 정하세요.</p>
+    <span class="hidden-list" id="hidden-list"></span>
+    <button type="button" class="btn sm" id="layout-reset">기본 배치로</button>
+    <button type="button" class="btn sm primary" id="layout-done">완료</button>
+  </div>
+
+  <main class="board" id="board">
+    <section class="hero" aria-label="오늘 현황" data-block="hero">
+      <div class="hero-left">
+        <div class="hero-date"><span id="hero-date">날짜</span><span class="badge" id="hero-badge">오늘</span></div>
+        <div class="clock" id="clock" aria-label="현재 시각"><span id="clock-hm">--:--</span><span class="sec" id="clock-s">:--</span></div>
+        <div class="daynav">
+          <button type="button" class="hbtn" id="prev-day" aria-label="이전 날">‹ 이전</button>
+          <button type="button" class="hbtn" id="go-today">오늘</button>
+          <button type="button" class="hbtn" id="next-day" aria-label="다음 날">다음 ›</button>
+          <input type="date" class="hdate" id="jump-date" aria-label="날짜로 이동">
+        </div>
+      </div>
+      <div class="hero-right">
+        <div class="prog-head">
+          <span class="prog-num"><span id="p-done">0</span><small> / <span id="p-total">0</span></small></span>
+          <span class="prog-label" id="p-label">오늘 완료</span>
+          <span class="prog-pct" id="p-pct">0%</span>
+        </div>
+        <div class="prog-bar" id="p-barwrap" role="progressbar" aria-label="완료율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="p-bar"></i></div>
+        <div class="prog-split" id="p-split"></div>
+        <div class="next" id="next-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8a5 5 0 0 1 10 0v3.4l1.5 2.6h-13L5 11.4z"/><path d="M8 16.5a2 2 0 0 0 4 0"/></svg><span id="next-text">알람을 확인하는 중…</span></div>
+      </div>
+      <div class="tl-wrap">
+        <div class="timeline" id="timeline" aria-hidden="true"></div>
+        <div class="tl-legend" aria-hidden="true">
+          <span><i></i>시간 정한 할일</span>
+          <span><i class="f"></i>완료</span>
+          <span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8a5 5 0 0 1 10 0v3.4l1.5 2.6h-13L5 11.4z"/><path d="M8 16.5a2 2 0 0 0 4 0"/></svg>알람</span>
+        </div>
+        <p class="sr-only" id="timeline-sr"></p>
+      </div>
+    </section>
+    <section class="card" aria-labelledby="r-title" data-block="routines">
       <header class="card-head">
         <div class="ttl">
           <h2 id="r-title">고정 할일 <span class="count" id="r-count"></span></h2>
@@ -402,7 +419,7 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
       <p class="off-note" id="routine-off" hidden></p>
     </section>
 
-    <section class="card" aria-labelledby="task-h">
+    <section class="card" aria-labelledby="task-h" data-block="today">
       <header class="card-head">
         <div class="ttl">
           <h2 id="task-h"><span id="task-title">오늘 할일</span> <span class="count" id="t-count"></span></h2>
@@ -418,8 +435,7 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
       <ul class="list" id="task-list"></ul>
     </section>
 
-    <div class="side">
-    <section class="card" aria-labelledby="week-h">
+    <section class="card" aria-labelledby="week-h" data-block="week">
       <header class="card-head">
         <div class="ttl">
           <h2 id="week-h"><span id="week-title">이번 주 할일</span> <span class="count" id="w-count"></span></h2>
@@ -439,7 +455,7 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
       <button type="button" class="carry" id="week-carry" hidden></button>
       <ul class="list" id="week-list"></ul>
     </section>
-    <aside class="card cal" aria-labelledby="cal-title">
+    <aside class="card cal" aria-labelledby="cal-title" data-block="cal">
       <header class="cal-head">
         <h2 id="cal-title">달력</h2>
         <button type="button" class="icon-btn" id="cal-prev" aria-label="이전 달"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 4.5L7 10l5.5 5.5"/></svg></button>
@@ -458,27 +474,26 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
         <div class="stat"><b id="st-rec">0일</b><span>할일 있던 날</span></div>
       </div>
     </aside>
-    </div>
+    <section class="card memo-card" aria-labelledby="memo-h" data-block="memo">
+      <header class="card-head">
+        <div class="ttl">
+          <h2 id="memo-h">메모</h2>
+          <p class="card-sub">복사한 표·사진·서식을 그대로 붙여넣을 수 있어요. 적는 대로 자동 저장돼요.</p>
+        </div>
+      </header>
+      <div class="memo-tools" id="memo-tools" role="toolbar" aria-label="메모 도구">
+        <button type="button" class="tool" data-cmd="check" title="체크리스트"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="3"/><path d="M6.5 10.2l2.4 2.4 4.6-5.2"/></svg>체크리스트</button>
+        <button type="button" class="tool" data-cmd="bold" title="굵게 (Ctrl+B)"><b>B</b></button>
+        <button type="button" class="tool" data-cmd="ul" title="글머리 목록">• 목록</button>
+        <button type="button" class="tool" data-cmd="ol" title="번호 목록">1. 번호</button>
+        <label class="tool" for="memo-file" title="사진 넣기"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2"/><circle cx="7" cy="8.5" r="1.4"/><path d="M17 13.5l-4.2-4.2L5 16"/></svg>사진</label>
+        <input type="file" id="memo-file" accept="image/*" multiple hidden>
+        <span class="memo-status" id="memo-status" aria-live="polite"></span>
+      </div>
+      <div class="memo-ed is-empty" id="memo-ed" contenteditable="false" role="textbox" aria-multiline="true" aria-label="메모" spellcheck="false" data-placeholder="여기에 메모를 적거나 붙여넣으세요. 엑셀 표나 사진도 그대로 들어가요."></div>
+    </section>
   </main>
 
-  <section class="card memo-card" aria-labelledby="memo-h">
-    <header class="card-head">
-      <div class="ttl">
-        <h2 id="memo-h">메모</h2>
-        <p class="card-sub">복사한 표·사진·서식을 그대로 붙여넣을 수 있어요. 적는 대로 자동 저장돼요.</p>
-      </div>
-    </header>
-    <div class="memo-tools" id="memo-tools" role="toolbar" aria-label="메모 도구">
-      <button type="button" class="tool" data-cmd="check" title="체크리스트"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="3"/><path d="M6.5 10.2l2.4 2.4 4.6-5.2"/></svg>체크리스트</button>
-      <button type="button" class="tool" data-cmd="bold" title="굵게 (Ctrl+B)"><b>B</b></button>
-      <button type="button" class="tool" data-cmd="ul" title="글머리 목록">• 목록</button>
-      <button type="button" class="tool" data-cmd="ol" title="번호 목록">1. 번호</button>
-      <label class="tool" for="memo-file" title="사진 넣기"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2"/><circle cx="7" cy="8.5" r="1.4"/><path d="M17 13.5l-4.2-4.2L5 16"/></svg>사진</label>
-      <input type="file" id="memo-file" accept="image/*" multiple hidden>
-      <span class="memo-status" id="memo-status" aria-live="polite"></span>
-    </div>
-    <div class="memo-ed is-empty" id="memo-ed" contenteditable="false" role="textbox" aria-multiline="true" aria-label="메모" spellcheck="false" data-placeholder="여기에 메모를 적거나 붙여넣으세요. 엑셀 표나 사진도 그대로 들어가요."></div>
-  </section>
 
   <footer class="foot">
     <span><i id="store-dot"></i><span id="store-mode">저장소 연결 중…</span></span>
@@ -631,6 +646,9 @@ const ICON = {
 };
 
 /* ---------- 기본값 ---------- */
+const BLOCKS = { hero: '시계·진행률', routines: '고정 할일', today: '오늘 할일', week: '이번 주 할일', cal: '달력', memo: '메모' };
+const SIZES = { s: '좁게', m: '넓게', l: '전체' };
+const DEFAULT_LAYOUT = { order: ['hero', 'routines', 'today', 'week', 'cal', 'memo'], size: { hero: 'l', routines: 's', today: 's', week: 's', cal: 's', memo: 'l' }, hidden: [] };
 const DEFAULT_SETTINGS = {
   alarms: [
     { id: 'morning', time: '09:00', label: '아침 체크', days: [1, 2, 3, 4, 5], on: true },
@@ -943,6 +961,7 @@ function changed() {
   setTimeout(() => { renderPending = false; renderAll(); }, 0);
 }
 function renderAll() {
+  applyLayout();
   renderHero(); renderTimeline(); renderRoutines(); renderTasks(); renderWeek(); renderCalendar();
   renderNotice(); renderFoot(); renderSoundPill(); renderBackup(); renderNext(new Date(), true);
   if (ringState) renderRing();
@@ -1835,6 +1854,105 @@ async function memoInsertImages(files, keepCaret) {
   $('#memo-file').addEventListener('change', e => {
     const files = [...(e.target.files || [])].filter(f => /^image\//.test(f.type)); e.target.value = '';
     if (files.length) memoInsertImages(files, false);
+  });
+})();
+
+/* ---------- 배치 편집 ---------- */
+let layoutEdit = false; let layoutSig = ''; let dragId = null;
+function getLayout() {
+  const L = S().layout || {};
+  const order = (Array.isArray(L.order) ? L.order : []).filter(id => BLOCKS[id]);
+  for (const id of DEFAULT_LAYOUT.order) if (!order.includes(id)) order.push(id);
+  const size = Object.assign({}, DEFAULT_LAYOUT.size, L.size || {});
+  if (size.hero === 's') size.hero = 'm';
+  const hidden = (Array.isArray(L.hidden) ? L.hidden : []).filter(id => BLOCKS[id]);
+  return { order, size, hidden };
+}
+function saveLayout(L) { Store.settings = Object.assign({}, S(), { layout: L }); layoutSig = ''; persist('settings'); }
+function applyLayout(force) {
+  const L = getLayout(); const sig = JSON.stringify(L) + layoutEdit;
+  if (!force && sig === layoutSig) return; layoutSig = sig;
+  const board = $('#board');
+  for (const id of L.order) {
+    const el = board.querySelector(`:scope>[data-block="${id}"]`); if (!el) continue;
+    board.appendChild(el);
+    el.dataset.size = L.size[id] || 's';
+    el.hidden = L.hidden.includes(id);
+    el.draggable = layoutEdit;
+    let tools = el.querySelector(':scope>.blk-tools');
+    if (!tools) { tools = document.createElement('div'); tools.className = 'blk-tools'; el.appendChild(tools); }
+    const idx = L.order.filter(x => !L.hidden.includes(x)).indexOf(id);
+    const vis = L.order.filter(x => !L.hidden.includes(x)).length;
+    const sizes = id === 'hero' ? ['m', 'l'] : ['s', 'm', 'l'];
+    tools.innerHTML = `<span class="bt grip" aria-hidden="true" title="끌어서 옮기기">⋮⋮</span><span class="nm">${BLOCKS[id]}</span>
+      <button type="button" class="bt" data-lay="prev" aria-label="${BLOCKS[id]} 앞으로"${idx <= 0 ? ' disabled' : ''}>‹</button>
+      <button type="button" class="bt" data-lay="next" aria-label="${BLOCKS[id]} 뒤로"${idx >= vis - 1 ? ' disabled' : ''}>›</button>
+      <button type="button" class="bt" data-lay="size" title="폭 바꾸기 (${sizes.map(z => SIZES[z]).join('/')})">폭: ${SIZES[L.size[id]] || '좁게'}</button>
+      <button type="button" class="bt" data-lay="hide">숨기기</button>`;
+  }
+  $('#hidden-list').innerHTML = L.hidden.length
+    ? '<span>숨긴 칸:</span>' + L.hidden.map(id => `<button type="button" class="btn sm" data-show="${id}">${BLOCKS[id]} 보이기</button>`).join('')
+    : '';
+}
+function setLayoutEdit(on) {
+  layoutEdit = on;
+  document.documentElement.classList.toggle('layout-edit', on);
+  $('#layout-bar').hidden = !on;
+  $('#layout-btn').setAttribute('aria-pressed', String(on));
+  applyLayout(true);
+  if (on) toast('카드를 끌어서 옮기거나 ‹ › 로 순서를 바꿔보세요.');
+}
+function orderFromDom() { return [...$('#board').querySelectorAll(':scope>[data-block]')].map(el => el.dataset.block); }
+(() => {
+  const board = $('#board');
+  $('#layout-btn').addEventListener('click', () => setLayoutEdit(!layoutEdit));
+  $('#layout-done').addEventListener('click', () => { setLayoutEdit(false); toast('배치를 저장했어요.'); });
+  $('#layout-reset').addEventListener('click', () => { saveLayout(clone(DEFAULT_LAYOUT)); applyLayout(true); toast('기본 배치로 돌렸어요.'); });
+  $('#hidden-list').addEventListener('click', e => {
+    const b = e.target.closest('[data-show]'); if (!b) return;
+    const L = getLayout(); L.hidden = L.hidden.filter(x => x !== b.dataset.show); saveLayout(L); applyLayout(true);
+  });
+  board.addEventListener('click', e => {
+    const b = e.target.closest('[data-lay]'); if (!b || !layoutEdit) return;
+    const id = b.closest('[data-block]').dataset.block; const L = getLayout();
+    if (b.dataset.lay === 'size') {
+      const sizes = id === 'hero' ? ['m', 'l'] : ['s', 'm', 'l'];
+      L.size[id] = sizes[(sizes.indexOf(L.size[id]) + 1) % sizes.length];
+    } else if (b.dataset.lay === 'hide') {
+      if (L.order.filter(x => !L.hidden.includes(x)).length <= 1) { toast('칸을 하나는 남겨두세요.'); return; }
+      L.hidden.push(id); toast(`${BLOCKS[id]} 칸을 숨겼어요. 위 막대에서 다시 보이게 할 수 있어요.`);
+    } else {
+      const vis = L.order.filter(x => !L.hidden.includes(x)); const i = vis.indexOf(id);
+      const j = b.dataset.lay === 'prev' ? i - 1 : i + 1; if (j < 0 || j >= vis.length) return;
+      const other = vis[j]; const a = L.order.indexOf(id), c = L.order.indexOf(other);
+      L.order[a] = other; L.order[c] = id;
+    }
+    saveLayout(L); applyLayout(true);
+  });
+  board.addEventListener('dragstart', e => {
+    if (!layoutEdit) return;
+    const blk = e.target.closest && e.target.closest('[data-block]'); if (!blk) return;
+    dragId = blk.dataset.block; blk.classList.add('dragging');
+    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragId); } catch (err) {}
+  });
+  board.addEventListener('dragover', e => {
+    if (!dragId) return; e.preventDefault();
+    const over = e.target.closest && e.target.closest('[data-block]');
+    const dragEl = board.querySelector(`:scope>[data-block="${dragId}"]`);
+    if (!over || over === dragEl || !dragEl) return;
+    const r = over.getBoundingClientRect();
+    const after = over.dataset.size === 'l' ? e.clientY > r.top + r.height / 2 : e.clientX > r.left + r.width / 2;
+    const ref = after ? over.nextElementSibling : over;
+    if (ref !== dragEl && dragEl.nextElementSibling !== ref) board.insertBefore(dragEl, ref);
+  });
+  board.addEventListener('drop', e => { if (dragId) e.preventDefault(); });
+  board.addEventListener('dragend', () => {
+    if (!dragId) return;
+    const el = board.querySelector(`:scope>[data-block="${dragId}"]`); if (el) el.classList.remove('dragging');
+    dragId = null;
+    const L = getLayout(); const dom = orderFromDom();
+    L.order = dom.concat(L.order.filter(x => !dom.includes(x)));
+    saveLayout(L); applyLayout(true);
   });
 })();
 
