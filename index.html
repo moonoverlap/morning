@@ -225,6 +225,25 @@ select.input{padding-right:8px;cursor:pointer}
 .stat b{display:block;font-size:1.25rem;font-weight:700;letter-spacing:-.02em;line-height:1.2;font-variant-numeric:tabular-nums}
 .stat span{font-size:.75rem;color:var(--muted)}
 
+.memo-tools{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.tool{height:32px;min-width:32px;padding:0 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-size:.8125rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;color:var(--ink)}
+.tool:hover{border-color:var(--accent-line)}
+.tool svg{width:16px;height:16px}
+.memo-status{margin-left:auto;font-size:.75rem;color:var(--faint);white-space:nowrap}
+.memo-ed{min-height:220px;max-height:70vh;overflow:auto;resize:vertical;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);line-height:1.65;outline:none;overflow-wrap:anywhere;font-size:.9375rem}
+.memo-ed:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.memo-ed[contenteditable="false"]{opacity:.6}
+.memo-ed.is-empty::before{content:attr(data-placeholder);color:var(--faint);float:left;height:0;pointer-events:none}
+.memo-ed img{max-width:100%;height:auto;border-radius:6px;vertical-align:top}
+.memo-ed table{border-collapse:collapse;margin:6px 0}
+.memo-ed td,.memo-ed th{border:1px solid var(--line);padding:4px 8px;vertical-align:top}
+.memo-ed p{margin:0 0 .4em}
+.memo-ed ul,.memo-ed ol{margin:4px 0;padding-left:1.4em}
+.memo-ed ul.checklist{list-style:none;padding-left:0}
+.memo-ed ul.checklist>li{position:relative;padding-left:28px;margin:3px 0}
+.memo-ed ul.checklist>li::before{content:"";position:absolute;left:2px;top:.3em;width:17px;height:17px;box-sizing:border-box;border:2px solid var(--accent-line);border-radius:5px;background:var(--surface);cursor:pointer}
+.memo-ed ul.checklist>li[data-checked="true"]::before{border-color:var(--accent);background:var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat}
+.memo-ed ul.checklist>li[data-checked="true"]{color:var(--faint);text-decoration:line-through}
 .foot{display:flex;gap:6px 20px;flex-wrap:wrap;font-size:.8125rem;color:var(--muted)}
 .foot span{display:inline-flex;align-items:center;gap:6px}
 .foot i{width:7px;height:7px;border-radius:50%;background:var(--faint)}
@@ -442,6 +461,25 @@ dialog.ring{width:min(560px,calc(100vw - 32px));text-align:center}
     </div>
   </main>
 
+  <section class="card memo-card" aria-labelledby="memo-h">
+    <header class="card-head">
+      <div class="ttl">
+        <h2 id="memo-h">메모</h2>
+        <p class="card-sub">복사한 표·사진·서식을 그대로 붙여넣을 수 있어요. 적는 대로 자동 저장돼요.</p>
+      </div>
+    </header>
+    <div class="memo-tools" id="memo-tools" role="toolbar" aria-label="메모 도구">
+      <button type="button" class="tool" data-cmd="check" title="체크리스트"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="3"/><path d="M6.5 10.2l2.4 2.4 4.6-5.2"/></svg>체크리스트</button>
+      <button type="button" class="tool" data-cmd="bold" title="굵게 (Ctrl+B)"><b>B</b></button>
+      <button type="button" class="tool" data-cmd="ul" title="글머리 목록">• 목록</button>
+      <button type="button" class="tool" data-cmd="ol" title="번호 목록">1. 번호</button>
+      <label class="tool" for="memo-file" title="사진 넣기"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2"/><circle cx="7" cy="8.5" r="1.4"/><path d="M17 13.5l-4.2-4.2L5 16"/></svg>사진</label>
+      <input type="file" id="memo-file" accept="image/*" multiple hidden>
+      <span class="memo-status" id="memo-status" aria-live="polite"></span>
+    </div>
+    <div class="memo-ed is-empty" id="memo-ed" contenteditable="false" role="textbox" aria-multiline="true" aria-label="메모" spellcheck="false" data-placeholder="여기에 메모를 적거나 붙여넣으세요. 엑셀 표나 사진도 그대로 들어가요."></div>
+  </section>
+
   <footer class="foot">
     <span><i id="store-dot"></i><span id="store-mode">저장소 연결 중…</span></span>
     <button type="button" class="link" id="bk-foot" hidden></button>
@@ -608,7 +646,7 @@ const STARTER = [
 ];
 
 /* ---------- 저장소 (클라우드 db 우선, 없으면 이 브라우저) ---------- */
-const P = { routines: 'planner/main/routines', days: 'planner/main/days', weeks: 'planner/main/weeks', settings: 'planner/main' };
+const P = { routines: 'planner/main/routines', days: 'planner/main/days', weeks: 'planner/main/weeks', memo: 'planner/main/memo/main', settings: 'planner/main' };
 const LS_KEY = 'morning-checkboard:v1';
 const Store = {
   mode: 'loading', db: null,
@@ -740,6 +778,7 @@ async function initStore() {
   }
   renderAll();
   Backup.init();
+  Memo.init();
   Sound.unlock(); // 설치 앱 등 자동 재생이 허용된 환경이면 클릭 없이 소리가 켜짐
 }
 
@@ -1509,7 +1548,7 @@ const Backup = {
   dir: null, perm: 'none', asked: false, timer: null,
   lastAt: (() => { try { return localStorage.getItem(LB_KEY) || ''; } catch (e) { return ''; } })(),
   lastDlDay: (() => { try { return localStorage.getItem(LD_KEY) || ''; } catch (e) { return ''; } })(),
-  hasData() { return Object.keys(Store.routines).length + Object.keys(Store.days).length + Object.keys(Store.weeks).length > 0; },
+  hasData() { return Object.keys(Store.routines).length + Object.keys(Store.days).length + Object.keys(Store.weeks).length > 0 || !!Memo.html; },
   /* 폴더를 안 정했거나 허용이 안 됐을 때: 하루 한 번 '다운로드' 폴더에 저장 (그날 첫 클릭 때) */
   dailyDownload() {
     if (Store.mode !== 'local' || !isLoaded() || !this.hasData() || this.lastDlDay === todayKey) return;
@@ -1519,7 +1558,7 @@ const Backup = {
     try { localStorage.setItem(LD_KEY, todayKey); localStorage.setItem(LB_KEY, this.lastAt); } catch (e) {}
     renderBackup(); toast('오늘 백업 파일을 다운로드 폴더에 저장했어요.');
   },
-  data() { return { app: '아침 체크보드', version: 1, exportedAt: new Date().toISOString(), routines: Store.routines, days: Store.days, weeks: Store.weeks, settings: Store.settings }; },
+  data() { return { app: '아침 체크보드', version: 1, exportedAt: new Date().toISOString(), routines: Store.routines, days: Store.days, weeks: Store.weeks, settings: Store.settings, memo: Memo.html }; },
   async init() {
     if (Store.mode !== 'local' || !this.supported) { renderBackup(); return; }
     try {
@@ -1629,10 +1668,175 @@ $('#bk-apply').addEventListener('click', async () => {
   }
   Store.routines = d.routines || {}; Store.days = d.days || {}; Store.weeks = d.weeks || {};
   Store.settings = Object.assign(clone(DEFAULT_SETTINGS), d.settings || {});
+  if (typeof d.memo === 'string') await Memo.setFromBackup(d.memo);
   saveLocal(); pendingRestore = null; $('#bk-confirm').hidden = true;
   closeSettings(); changed(); Backup.schedule();
   toast('백업을 불러왔어요.');
 });
+
+/* ---------- 메모 (서식·표·사진 붙여넣기, 체크리스트) ---------- */
+const Memo = {
+  html: '', dirty: false, timer: null,
+  el() { return $('#memo-ed'); },
+  clean(html) {
+    try {
+      const doc = new DOMParser().parseFromString('<body>' + html + '</body>', 'text/html');
+      doc.body.querySelectorAll('script,style,iframe,object,embed,link,meta,base,form,noscript').forEach(n => n.remove());
+      doc.body.querySelectorAll('*').forEach(el => {
+        for (const a of [...el.attributes]) {
+          const nm = a.name.toLowerCase();
+          if (nm.startsWith('on') || ((nm === 'href' || nm === 'src') && /^\s*javascript:/i.test(a.value))) el.removeAttribute(a.name);
+        }
+      });
+      return doc.body.innerHTML;
+    } catch (e) { return ''; }
+  },
+  empty() { const ed = this.el(); ed.classList.toggle('is-empty', !ed.textContent.trim() && !ed.querySelector('img,table,li,hr')); },
+  render() { const ed = this.el(); if (document.activeElement === ed) return; ed.innerHTML = this.html; this.empty(); },
+  status(t) { $('#memo-status').textContent = t; },
+  async init() {
+    const ed = this.el();
+    if (Store.mode === 'db') {
+      try {
+        Store.db.doc(P.memo).onSnapshot(sn => {
+          if (this.dirty) return;
+          this.html = sn.exists ? this.clean(String((sn.data() || {}).html || '')) : '';
+          this.render(); ed.contentEditable = 'true';
+        }, () => { ed.contentEditable = 'true'; });
+      } catch (e) { ed.contentEditable = 'true'; }
+    } else {
+      try { this.html = this.clean((await IDB.get('memo')) || ''); } catch (e) { this.html = ''; }
+      this.render(); ed.contentEditable = 'true';
+    }
+  },
+  changed() { this.dirty = true; this.empty(); this.status('저장 중…'); clearTimeout(this.timer); this.timer = setTimeout(() => this.save(), 700); },
+  async save() {
+    const html = this.el().innerHTML; this.html = html;
+    try {
+      if (Store.mode === 'db') {
+        if (new Blob([html]).size > 240 * 1024) { this.dirty = false; this.status('용량이 커서 저장 못 함'); toast('메모가 너무 커서 저장하지 못했어요. 사진을 빼거나 줄여주세요.'); return; }
+        await Store.db.doc(P.memo).set({ html, updatedAt: new Date().toISOString() });
+      } else {
+        await IDB.set('memo', html); Backup.schedule();
+      }
+      this.dirty = false; this.status(`저장됨 ${hm(new Date())}`);
+    } catch (e) { this.dirty = false; this.status('저장 실패'); toast('메모를 저장하지 못했어요.'); }
+  },
+  async setFromBackup(html) {
+    this.html = this.clean(html || ''); const ed = this.el(); ed.innerHTML = this.html; this.empty();
+    if (Store.mode === 'local') { try { await IDB.set('memo', this.html); } catch (e) {} }
+  }
+};
+function memoSelNode() { const sel = getSelection(); if (!sel.rangeCount) return null; const n = sel.anchorNode; return n && (n.nodeType === 1 ? n : n.parentElement); }
+function memoFocus() {
+  const ed = Memo.el(); ed.focus();
+  const sel = getSelection();
+  if (!sel.rangeCount || !ed.contains(sel.anchorNode)) { const rg = document.createRange(); rg.selectNodeContents(ed); rg.collapse(false); sel.removeAllRanges(); sel.addRange(rg); }
+}
+function memoNormalize() {
+  const ed = Memo.el();
+  ed.querySelectorAll('script,style,iframe,object,embed,meta,link').forEach(n => n.remove());
+  ed.querySelectorAll('ul.checklist>li:not([data-checked])').forEach(li => li.setAttribute('data-checked', 'false'));
+}
+function memoToggleChecklist() {
+  memoFocus();
+  const ed = Memo.el(); const n = memoSelNode(); const ul = n && n.closest('ul');
+  if (ul && ed.contains(ul)) {
+    if (ul.classList.contains('checklist')) { ul.classList.remove('checklist'); ul.querySelectorAll(':scope>li').forEach(li => li.removeAttribute('data-checked')); }
+    else { ul.classList.add('checklist'); ul.querySelectorAll(':scope>li').forEach(li => li.setAttribute('data-checked', 'false')); }
+  } else {
+    const before = new Set(ed.querySelectorAll('ul'));
+    document.execCommand('insertUnorderedList');
+    const n2 = memoSelNode(); let ul2 = n2 && n2.closest('ul');
+    if (!ul2 || !ed.contains(ul2)) ul2 = [...ed.querySelectorAll('ul')].find(u => !before.has(u)) || null;
+    if (ul2) { ul2.classList.add('checklist'); memoNormalize(); }
+  }
+  Memo.changed();
+}
+function memoShrink(file) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file); const img = new Image();
+    img.onload = () => {
+      const max = 1600; const sc = Math.min(1, max / img.naturalWidth);
+      const w = Math.max(1, Math.round(img.naturalWidth * sc)), h = Math.max(1, Math.round(img.naturalHeight * sc));
+      const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
+      const png = file.type === 'image/png' && w * h <= 1400 * 1000;
+      if (!png) { g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); }
+      g.drawImage(img, 0, 0, w, h); URL.revokeObjectURL(url);
+      res(c.toDataURL(png ? 'image/png' : 'image/jpeg', 0.88));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('image')); };
+    img.src = url;
+  });
+}
+async function memoInsertImages(files, keepCaret) {
+  if (!keepCaret) memoFocus(); else Memo.el().focus();
+  for (const f of files) {
+    try { const src = await memoShrink(f); document.execCommand('insertHTML', false, `<img src="${src}" alt=""><br>`); }
+    catch (e) { toast('사진을 넣지 못했어요.'); }
+  }
+  Memo.changed();
+}
+(() => {
+  const ed = Memo.el();
+  ed.addEventListener('input', () => { memoNormalize(); Memo.changed(); });
+  ed.addEventListener('paste', e => {
+    const cd = e.clipboardData; if (!cd) return;
+    const imgs = [...cd.files].filter(f => /^image\//.test(f.type));
+    const html = cd.getData('text/html');
+    if (html && /<table/i.test(html)) setTimeout(() => {
+      // 표를 붙여넣은 뒤 커서를 표 아래 새 줄로 옮김
+      const n = memoSelNode(); const tb = n && n.closest('table');
+      if (!tb || !ed.contains(tb)) return;
+      let nx = tb.nextElementSibling;
+      if (!nx || nx.tagName !== 'P') { nx = document.createElement('p'); nx.innerHTML = '<br>'; tb.after(nx); }
+      const rg = document.createRange(); rg.setStart(nx, 0); rg.collapse(true);
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg); Memo.changed();
+    }, 0);
+    if (!imgs.length) return; // 텍스트·표·서식은 브라우저 기본 붙여넣기로 그대로
+    let onlyImage = !html;
+    if (html) { const doc = new DOMParser().parseFromString(html, 'text/html'); onlyImage = !doc.body.textContent.trim() && !doc.querySelector('table'); }
+    if (onlyImage) { e.preventDefault(); memoInsertImages(imgs, true); }
+  });
+  ed.addEventListener('dragover', e => { if (e.dataTransfer && [...e.dataTransfer.items].some(i => i.kind === 'file')) e.preventDefault(); });
+  ed.addEventListener('drop', e => {
+    const files = [...((e.dataTransfer && e.dataTransfer.files) || [])].filter(f => /^image\//.test(f.type));
+    if (!files.length) return;
+    e.preventDefault();
+    if (document.caretRangeFromPoint) { const rg = document.caretRangeFromPoint(e.clientX, e.clientY); if (rg && ed.contains(rg.startContainer)) { const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg); } }
+    memoInsertImages(files, true);
+  });
+  ed.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    const li = e.target.closest && e.target.closest('ul.checklist>li'); if (!li || !ed.contains(li)) return;
+    if (e.clientX - li.getBoundingClientRect().left <= 24) {
+      e.preventDefault();
+      li.setAttribute('data-checked', li.getAttribute('data-checked') === 'true' ? 'false' : 'true');
+      Memo.changed();
+    }
+  });
+  ed.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+    const li = memoSelNode() && memoSelNode().closest('ul.checklist>li'); if (!li) return;
+    requestAnimationFrame(() => { const cur = memoSelNode() && memoSelNode().closest('ul.checklist>li'); if (cur && cur !== li) cur.setAttribute('data-checked', 'false'); });
+  });
+  const tools = $('#memo-tools');
+  tools.addEventListener('mousedown', e => { if (e.target.closest('[data-cmd]')) e.preventDefault(); });
+  tools.addEventListener('click', e => {
+    const b = e.target.closest('[data-cmd]'); if (!b || ed.contentEditable !== 'true') return;
+    const c = b.dataset.cmd;
+    if (c === 'check') { memoToggleChecklist(); return; }
+    memoFocus();
+    if (c === 'bold') document.execCommand('bold');
+    else if (c === 'ul') document.execCommand('insertUnorderedList');
+    else if (c === 'ol') document.execCommand('insertOrderedList');
+    memoNormalize(); Memo.changed();
+  });
+  $('#memo-file').addEventListener('change', e => {
+    const files = [...(e.target.files || [])].filter(f => /^image\//.test(f.type)); e.target.value = '';
+    if (files.length) memoInsertImages(files, false);
+  });
+})();
 
 /* ---------- 화면 이벤트 ---------- */
 document.addEventListener('pointerdown', () => {
